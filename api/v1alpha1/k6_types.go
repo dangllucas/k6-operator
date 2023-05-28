@@ -74,8 +74,9 @@ type K6Spec struct {
 	Scuttle     K6Scuttle              `json:"scuttle,omitempty"`
 	Cleanup     Cleanup                `json:"cleanup,omitempty"`
 
-	TestRunID string `json:"testRunId,omitempty"` // PLZ reserved field
-	Token     string `json:"token,omitempty"`     // PLZ reserved field (for now)
+	TestRunID  string `json:"testRunId,omitempty"`  // PLZ reserved field
+	Token      string `json:"token,omitempty"`      // PLZ reserved field (for now)
+	TestRunUri string `json:"testRunUri,omitempty"` // PLZ reservied field
 }
 
 // K6Script describes where the script to execute the tests is found
@@ -143,7 +144,8 @@ func init() {
 }
 
 // Parse extracts Script data bits from K6 spec and performs basic validation
-func (spec K6Script) Parse() (*types.Script, error) {
+func (k6 K6Spec) ParseScript() (*types.Script, error) {
+	spec := k6.Script
 	s := &types.Script{
 		Filename: "test.js",
 		Path:     "/test/",
@@ -174,6 +176,15 @@ func (spec K6Script) Parse() (*types.Script, error) {
 		s.Name = "LocalFile"
 		s.Type = "LocalFile"
 		s.Path, s.Filename = filepath.Split(spec.LocalFile)
+		return s, nil
+	}
+
+	// If no script is specified, check for PLZ mode case
+	if len(k6.TestRunUri) > 0 {
+		s.Name = "LocalFile"
+		s.Type = "Remote"
+		s.Path = "/test/"
+		s.Filename = "archive.tar"
 		return s, nil
 	}
 

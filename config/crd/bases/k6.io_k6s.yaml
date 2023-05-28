@@ -4959,6 +4959,8 @@ spec:
                 type: object
               testRunId:
                 type: string
+              testRunUri:
+                type: string
               token:
                 type: string
             required:

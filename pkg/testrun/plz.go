@@ -36,16 +36,11 @@ func NewPLZTestRun(plz *v1alpha1.PrivateLoadZone, trData cloud.TestRunData) *v1a
 			Parallelism: int32(trData.Instances),
 			Separate:    true,
 			// Arguments: "--out cloud",
-			Script: v1alpha1.K6Script{
-				ConfigMap: v1alpha1.K6Configmap{
-					Name: "crocodile-stress-test-short",
-					File: "test.js",
-				},
-			},
 			Cleanup: v1alpha1.Cleanup("post"),
 
-			TestRunID: trData.TestRunId,
-			Token:     plz.Spec.Token,
+			TestRunID:  trData.TestRunID(),
+			Token:      plz.Spec.Token,
+			TestRunUri: trData.ArchiveURL,
 		},
 	}
 }

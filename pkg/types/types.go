@@ -9,10 +9,10 @@ import (
 
 // Internal type created to support Spec.script options
 type Script struct {
-	Name     string // name of ConfigMap or VolumeClaim or "LocalFile"
+	Name     string // Name of ConfigMap or VolumeClaim or "LocalFile"
 	Filename string
 	Path     string
-	Type     string // ConfigMap | VolumeClaim | LocalFile
+	Type     string // ConfigMap | VolumeClaim | LocalFile | Remote
 }
 
 func (s *Script) FullName() string {
@@ -47,6 +47,15 @@ func (s *Script) Volume() []corev1.Volume {
 				},
 			},
 		}
+	case "Remote":
+		return []corev1.Volume{
+			corev1.Volume{
+				Name: "archive-volume",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+		}
 	default:
 		return []corev1.Volume{}
 	}
@@ -57,6 +66,16 @@ func (s *Script) VolumeMount() []corev1.VolumeMount {
 	if s.Type == "LocalFile" {
 		return []corev1.VolumeMount{}
 	}
+
+	if s.Type == "Remote" {
+		return []corev1.VolumeMount{
+			corev1.VolumeMount{
+				Name:      "archive-volume",
+				MountPath: "/test",
+			},
+		}
+	}
+
 	return []corev1.VolumeMount{
 		corev1.VolumeMount{
 			Name:      "k6-test-volume",

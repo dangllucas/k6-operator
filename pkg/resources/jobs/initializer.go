@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/grafana/k6-operator/api/v1alpha1"
+	"github.com/grafana/k6-operator/pkg/resources/containers"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,7 +13,7 @@ import (
 
 // NewInitializerJob builds a template used to initializefor creating a starter job
 func NewInitializerJob(k6 *v1alpha1.K6, argLine string) (*batchv1.Job, error) {
-	script, err := k6.Spec.Script.Parse()
+	script, err := k6.Spec.ParseScript()
 	if err != nil {
 		return nil, err
 	}
@@ -59,8 +60,8 @@ func NewInitializerJob(k6 *v1alpha1.K6, argLine string) (*batchv1.Job, error) {
 		scriptName  = script.FullName()
 		archiveName = fmt.Sprintf("/tmp/%s.archived.tar", script.Filename)
 	)
-	command, istioEnabled := newIstioCommand(k6.Spec.Scuttle.Enabled, []string{"sh", "-c"})
-	command = append(command, fmt.Sprintf(
+	istioCommand, istioEnabled := newIstioCommand(k6.Spec.Scuttle.Enabled, []string{"sh", "-c"})
+	command := append(istioCommand, fmt.Sprintf(
 		// There can be several scenarios from k6 command here:
 		// a) script is correct and `k6 inspect` outputs JSON
 		// b) script is partially incorrect and `k6` outputs a warning log message and
@@ -83,7 +84,7 @@ func NewInitializerJob(k6 *v1alpha1.K6, argLine string) (*batchv1.Job, error) {
 	env := append(newIstioEnvVar(k6.Spec.Scuttle, istioEnabled), k6.Spec.Initializer.Env...)
 
 	var zero32 int32
-	return &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        fmt.Sprintf("%s-initializer", k6.Name),
 			Namespace:   k6.Namespace,
@@ -122,5 +123,21 @@ func NewInitializerJob(k6 *v1alpha1.K6, argLine string) (*batchv1.Job, error) {
 				},
 			},
 		},
-	}, nil
+	}
+
+	if k6.IsTrue(v1alpha1.CloudPLZTestRun) {
+		if len(k6.Spec.TestRunUri) == 0 {
+			return job, fmt.Errorf("PLZ test run cannot have empty testRunUri")
+		}
+
+		job.Spec.Template.Spec.InitContainers = []corev1.Container{containers.NewS3Container(
+			k6.Spec.TestRunUri,
+			"ghcr.io/grafana/operator:latest-starter",
+			script.VolumeMount()[0],
+			istioCommand,
+			env,
+		)}
+	}
+
+	return job, nil
 }

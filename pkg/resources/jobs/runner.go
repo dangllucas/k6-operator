@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/k6-operator/api/v1alpha1"
 	"github.com/grafana/k6-operator/pkg/cloud"
+	"github.com/grafana/k6-operator/pkg/resources/containers"
 	"github.com/grafana/k6-operator/pkg/segmentation"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -43,7 +44,7 @@ func NewRunnerJob(k6 *v1alpha1.K6, index int, token string) (*batchv1.Job, error
 		command = append(command, args...)
 	}
 
-	script, err := k6.Spec.Script.Parse()
+	script, err := k6.Spec.ParseScript()
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +182,22 @@ func NewRunnerJob(k6 *v1alpha1.K6, index int, token string) (*batchv1.Job, error
 	if k6.Spec.Separate {
 		job.Spec.Template.Spec.Affinity = newAntiAffinity()
 	}
+
+	if k6.IsTrue(v1alpha1.CloudPLZTestRun) {
+		if len(k6.Spec.TestRunUri) == 0 {
+			return job, fmt.Errorf("PLZ test run cannot have empty testRunUri")
+		}
+
+		istioCommand, _ := newIstioCommand(k6.Spec.Scuttle.Enabled, []string{"sh", "-c"})
+		job.Spec.Template.Spec.InitContainers = []corev1.Container{containers.NewS3Container(
+			k6.Spec.TestRunUri,
+			"ghcr.io/grafana/operator:latest-starter",
+			script.VolumeMount()[0],
+			istioCommand,
+			env,
+		)}
+	}
+
 	return job, nil
 }
 
