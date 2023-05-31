@@ -14,7 +14,7 @@ func TestName(testRunId string) string {
 	return fmt.Sprintf("plz-test-%s", testRunId)
 }
 
-func NewPLZTestRun(plz *v1alpha1.PrivateLoadZone, trData cloud.TestRunData) *v1alpha1.K6 {
+func NewPLZTestRun(plz *v1alpha1.PrivateLoadZone, trData *cloud.TestRunData) *v1alpha1.K6 {
 	return &v1alpha1.K6{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TestName(trData.TestRunId),
@@ -22,6 +22,7 @@ func NewPLZTestRun(plz *v1alpha1.PrivateLoadZone, trData cloud.TestRunData) *v1a
 		},
 		Spec: v1alpha1.K6Spec{
 			Runner: v1alpha1.Pod{
+				Image:              trData.RunnerImage,
 				ServiceAccountName: plz.Spec.ServiceAccountName,
 				NodeSelector:       plz.Spec.NodeSelector,
 				Resources: corev1.ResourceRequirements{
@@ -33,7 +34,7 @@ func NewPLZTestRun(plz *v1alpha1.PrivateLoadZone, trData cloud.TestRunData) *v1a
 				ServiceAccountName: plz.Spec.ServiceAccountName,
 				NodeSelector:       plz.Spec.NodeSelector,
 			},
-			Parallelism: int32(trData.Instances),
+			Parallelism: int32(trData.InstanceCount),
 			Separate:    true,
 			// Arguments: "--out cloud",
 			Cleanup: v1alpha1.Cleanup("post"),
