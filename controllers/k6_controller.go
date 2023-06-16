@@ -221,13 +221,16 @@ func (r *K6Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			// This is a "forced" abort of the PLZ test run.
 			// Wait until all the test runs are stopped, kill jobs and proceed.
 			if StoppedJobs(ctx, log, k6, r) {
-				if err = KillJobs(ctx, log, k6, r); err != nil {
+				if allDeleted, err := KillJobs(ctx, log, k6, r); err != nil {
 					return ctrl.Result{RequeueAfter: time.Second}, err
 				} else {
-					k6.UpdateCondition(v1alpha1.CloudTestRunAborted, metav1.ConditionTrue)
-					_, err := r.UpdateStatus(ctx, k6, log)
-					if err != nil {
-						return ctrl.Result{}, err
+					// if we just have deleted all jobs, update status and go for reconcile
+					if allDeleted {
+						k6.UpdateCondition(v1alpha1.CloudTestRunAborted, metav1.ConditionTrue)
+						_, err := r.UpdateStatus(ctx, k6, log)
+						if err != nil {
+							return ctrl.Result{}, err
+						}
 					}
 				}
 			}

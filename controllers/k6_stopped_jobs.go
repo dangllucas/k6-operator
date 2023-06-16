@@ -90,12 +90,16 @@ func StoppedJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.K6, r *K6Rec
 	return
 }
 
-func KillJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.K6, r *K6Reconciler) (err error) {
+// KillJobs retrieves all runner jobs and attempts to delete them
+// with propagation policy so that corresponding pods are deleted as well.
+// On failure, error is returned.
+// On success, error is nil and allDeleted shows if all retrieved jobs were deleted.
+func KillJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.K6, r *K6Reconciler) (allDeleted bool, err error) {
 	if len(k6.Status.TestRunID) > 0 {
 		log = log.WithValues("testRunId", k6.Status.TestRunID)
 	}
 
-	log.Info("Checking if all runner pods are finished")
+	log.Info("Killing all runner jobs.")
 
 	selector := labels.SelectorFromSet(map[string]string{
 		"app":    "k6",
@@ -111,13 +115,16 @@ func KillJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.K6, r *K6Reconc
 		return
 	}
 
+	var deleteCount int
+
 	propagationPolicy := client.PropagationPolicy(metav1.DeletionPropagation(metav1.DeletePropagationBackground))
 	for _, job := range jl.Items {
 		if err = r.Delete(ctx, &job, propagationPolicy); err != nil {
 			log.Error(err, fmt.Sprintf("Failed to delete runner job %s", job.Name))
 			// do we need to retry here?
 		}
+		deleteCount++
 	}
 
-	return nil
+	return deleteCount == len(jl.Items), nil
 }
