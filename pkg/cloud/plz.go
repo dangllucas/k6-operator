@@ -2,13 +2,18 @@ package cloud
 
 import (
 	"fmt"
+	"strings"
 
 	"go.k6.io/k6/cloudapi"
 )
 
+const (
+	defaultApiUrl    = "https://api.k6.io/"
+	defaultIngestUrl = "https://ingest.k6.io/"
+)
+
 func RegisterPLZ(client *cloudapi.Client, data PLZRegistrationData) error {
-	// url := fmt.Sprintf("https://%s/v1/load-zones", client.GetURL())
-	url := fmt.Sprintf("http://%s/v1/load-zones", "mock-cloud.k6-operator-system.svc.cluster.local:8080")
+	url := fmt.Sprintf("%s/cloud-resources/v1/load-zones", client.BaseURL())
 
 	req, err := client.NewRequest("POST", url, data)
 	if err != nil {
@@ -28,8 +33,7 @@ func RegisterPLZ(client *cloudapi.Client, data PLZRegistrationData) error {
 }
 
 func DeRegisterPLZ(client *cloudapi.Client, name string) error {
-	// url := fmt.Sprintf("https://%s/v1/load-zones/%s", client.GetURL(), name)
-	url := fmt.Sprintf("http://%s/v1/load-zones/%s", "mock-cloud.k6-operator-system.svc.cluster.local:8080", name)
+	url := fmt.Sprintf("%s/cloud-resources/v1/load-zones/%s", client.BaseURL(), name)
 
 	req, err := client.NewRequest("DELETE", url, nil)
 	if err != nil {
@@ -37,4 +41,13 @@ func DeRegisterPLZ(client *cloudapi.Client, name string) error {
 	}
 
 	return client.Do(req, nil)
+}
+
+// temporary hack!
+func ApiURL(k6CloudHostEnvVar string) string {
+	url := defaultApiUrl
+	if strings.Contains(k6CloudHostEnvVar, "staging") {
+		url = "https://api.staging.k6.io"
+	}
+	return url
 }

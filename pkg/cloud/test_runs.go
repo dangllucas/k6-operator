@@ -103,17 +103,15 @@ func getTestRun(client *cloudapi.Client, url string) (*TestRunData, error) {
 	return &trData, nil
 }
 
+// called by PLZ controller
 func GetTestRunData(client *cloudapi.Client, refID string) (*TestRunData, error) {
-	url := fmt.Sprintf("http://%s/loadtests/v4/test_runs(%s)?select=id,run_status,k8s_load_zones_config",
-		"mock-cloud.k6-operator-system.svc.cluster.local:8080", refID)
-	// url := fmt.Sprintf("https://%s/loadtests/v4/test_runs(%s)?select=id,run_status,k8s_load_zones_config", client.GetURL(), refID)
+	url := fmt.Sprintf("%s/loadtests/v4/test_runs(%s)?select=id,run_status,k8s_load_zones_config", client.BaseURL(), refID)
 	return getTestRun(client, url)
 }
 
+// called by K6 controller
 func GetTestRunState(client *cloudapi.Client, refID string, log logr.Logger) (TestRunStatus, error) {
-	url := fmt.Sprintf("http://%s/loadtests/v4/test_runs(%s)?select=id,run_status,k8s_load_zones_config",
-		"mock-cloud.k6-operator-system.svc.cluster.local:8080", refID)
-	// url := fmt.Sprintf("https://%s/loadtests/v4/test_runs(%s)?select=id,run_status", client.Host, refID)
+	url := fmt.Sprintf("https://%s/loadtests/v4/test_runs(%s)?select=id,run_status", ApiURL(client.BaseURL()), refID)
 	trData, err := getTestRun(client, url)
 	return TestRunStatus(trData.RunStatus), err
 }
