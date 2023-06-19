@@ -69,13 +69,13 @@ func init() {
 
 // Register attempts to register PLZ with the k6 Cloud.
 // Regardless of the result, condition PLZRegistered will be updated.
-func (plz *PrivateLoadZone) Register(ctx context.Context, logger logr.Logger, client *cloudapi.Client) {
+func (plz *PrivateLoadZone) Register(ctx context.Context, logger logr.Logger, client *cloudapi.Client) error {
 	plz.UpdateCondition(PLZRegistered, metav1.ConditionFalse)
 
 	cpu, err := resource.ParseQuantity(plz.Spec.Resources.Cpu().String())
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("CPU resource of PLZ %s cannot be parsed", plz.Name))
-		return
+		return err
 	}
 
 	data := cloud.PLZRegistrationData{
@@ -88,21 +88,23 @@ func (plz *PrivateLoadZone) Register(ctx context.Context, logger logr.Logger, cl
 
 	if err := cloud.RegisterPLZ(client, data); err != nil {
 		logger.Error(err, fmt.Sprintf("Failed to register PLZ %s.", plz.Name))
+		return err
 	}
 
 	logger.Info(fmt.Sprintf("Registered PLZ %s.", plz.Name))
 
-	plz.UpdateCondition(PLZRegistered, metav1.ConditionTrue)
+	return nil
 }
 
 // Deregister attempts to deregister PLZ with the k6 Cloud.
 // It is meant to be used as a finalizer.
-func (plz *PrivateLoadZone) Deregister(ctx context.Context, logger logr.Logger, client *cloudapi.Client) {
+func (plz *PrivateLoadZone) Deregister(ctx context.Context, logger logr.Logger, client *cloudapi.Client) error {
 	if err := cloud.DeRegisterPLZ(client, plz.Name); err != nil {
 		logger.Error(err, fmt.Sprintf("Failed to de-register PLZ %s.", plz.Name))
+		return err
 	}
 
 	logger.Info(fmt.Sprintf("De-registered PLZ %s.", plz.Name))
 
-	plz.UpdateCondition(PLZRegistered, metav1.ConditionFalse)
+	return nil
 }
