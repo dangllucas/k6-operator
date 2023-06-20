@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	defaultApiUrl    = "https://api.k6.io/"
-	defaultIngestUrl = "https://ingest.k6.io/"
+	defaultApiUrl    = "https://api.k6.io"
+	defaultIngestUrl = "https://ingest.k6.io"
 )
 
 func RegisterPLZ(client *cloudapi.Client, data PLZRegistrationData) error {
