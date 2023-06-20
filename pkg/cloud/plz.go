@@ -13,7 +13,7 @@ const (
 )
 
 func RegisterPLZ(client *cloudapi.Client, data PLZRegistrationData) error {
-	url := fmt.Sprintf("%s/cloud-resources/v1/load-zones", client.BaseURL())
+	url := fmt.Sprintf("%s/cloud-resources/v1/load-zones", strings.TrimSuffix(client.BaseURL(), "/v1"))
 
 	req, err := client.NewRequest("POST", url, data)
 	if err != nil {
@@ -33,7 +33,7 @@ func RegisterPLZ(client *cloudapi.Client, data PLZRegistrationData) error {
 }
 
 func DeRegisterPLZ(client *cloudapi.Client, name string) error {
-	url := fmt.Sprintf("%s/cloud-resources/v1/load-zones/%s", client.BaseURL(), name)
+	url := fmt.Sprintf("%s/cloud-resources/v1/load-zones/%s", strings.TrimSuffix(client.BaseURL(), "/v1"), name)
 
 	req, err := client.NewRequest("DELETE", url, nil)
 	if err != nil {
