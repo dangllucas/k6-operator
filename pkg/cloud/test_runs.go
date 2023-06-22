@@ -23,7 +23,7 @@ type TestRunPoller struct {
 	Client *cloudapi.Client
 }
 
-func NewTestRunPoller(host, token string, logger logr.Logger) *TestRunPoller {
+func NewTestRunPoller(host, token, plzName string, logger logr.Logger) *TestRunPoller {
 	logrusLogger := &logrus.Logger{
 		Out:       os.Stdout,
 		Formatter: new(logrus.TextFormatter),
@@ -50,7 +50,7 @@ func NewTestRunPoller(host, token string, logger logr.Logger) *TestRunPoller {
 	}
 
 	testRunPoller.Poller.OnInterval = func() {
-		list, err := testRunPoller.getTestRuns()
+		list, err := testRunPoller.getTestRuns(plzName)
 		if err != nil {
 			logger.Error(err, "Failed to get test runs from k6 Cloud.")
 		} else {
@@ -69,8 +69,8 @@ func (poller *TestRunPoller) GetTestRuns() chan string {
 	return poller.testRunCh
 }
 
-func (poller *TestRunPoller) getTestRuns() ([]string, error) {
-	url := poller.host + "/v4/plz-test-runs"
+func (poller *TestRunPoller) getTestRuns(plzName string) ([]string, error) {
+	url := fmt.Sprintf("%s/v4/plz-test-runs?plz_name=%s", poller.host, plzName)
 	req, err := poller.Client.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

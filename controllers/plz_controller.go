@@ -84,7 +84,7 @@ func (r *PrivateLoadZoneReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 
-		r.poller = cloud.NewTestRunPoller(cloud.ApiURL(k6CloudHost()), token, logger)
+		r.poller = cloud.NewTestRunPoller(cloud.ApiURL(k6CloudHost()), token, plz.Name, logger)
 	}
 
 	if plz.DeletionTimestamp.IsZero() && (plz.IsUnknown(v1alpha1.PLZRegistered) || plz.IsFalse(v1alpha1.PLZRegistered)) {
