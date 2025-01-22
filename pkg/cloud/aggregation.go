@@ -9,26 +9,26 @@ import (
 )
 
 var aggregationVarNames = []string{
-	"K6_CLOUD_AGGREGATION_MIN_SAMPLES",
+	// cloud output v2
+	"K6_CLOUD_API_VERSION",
 	"K6_CLOUD_AGGREGATION_PERIOD",
 	"K6_CLOUD_AGGREGATION_WAIT_PERIOD",
 	"K6_CLOUD_METRIC_PUSH_INTERVAL",
-	"K6_CLOUD_MAX_METRIC_SAMPLES_PER_PACKAGE",
-	"K6_CLOUD_MAX_METRIC_PUSH_CONCURRENCY",
+	"K6_CLOUD_METRIC_PUSH_CONCURRENCY",
 }
 
-func EncodeAggregationConfig(testRun *cloudapi.CreateTestRunResponse) string {
-	return fmt.Sprintf("%d|%s|%s|%s|%d|%d",
-		testRun.ConfigOverride.AggregationMinSamples.Int64,
-		testRun.ConfigOverride.AggregationPeriod.String(),
-		testRun.ConfigOverride.AggregationWaitPeriod.String(),
-		testRun.ConfigOverride.MetricPushInterval.String(),
-		testRun.ConfigOverride.MaxMetricSamplesPerPackage.Int64,
-		testRun.ConfigOverride.MetricPushConcurrency.Int64)
+func EncodeAggregationConfig(testRun *cloudapi.Config) string {
+	return fmt.Sprintf("%d|%s|%s|%s|%d",
+		2, // version of protocol
+		testRun.AggregationPeriod.String(),
+		testRun.AggregationWaitPeriod.String(),
+		testRun.MetricPushInterval.String(),
+		testRun.MetricPushConcurrency.Int64)
 }
 
 func DecodeAggregationConfig(encoded string) ([]corev1.EnvVar, error) {
 	values := strings.Split(encoded, "|")
+
 	if len(values) != len(aggregationVarNames) {
 		return nil, fmt.Errorf(
 			"Aggregation vars got corrupted: there are %d values instead of %d. Encoded value: `%s`.",

@@ -17,23 +17,20 @@ import (
 
 // these are default values hard-coded in k6
 var aggregationEnvVars = []corev1.EnvVar{
-	corev1.EnvVar{
-		Name:  "K6_CLOUD_AGGREGATION_MIN_SAMPLES",
-		Value: "50",
-	}, corev1.EnvVar{
+	{
+		Name:  "K6_CLOUD_API_VERSION",
+		Value: "2",
+	}, {
 		Name:  "K6_CLOUD_AGGREGATION_PERIOD",
-		Value: "3s",
-	}, corev1.EnvVar{
+		Value: "5s",
+	}, {
 		Name:  "K6_CLOUD_AGGREGATION_WAIT_PERIOD",
-		Value: "8s",
-	}, corev1.EnvVar{
+		Value: "3s",
+	}, {
 		Name:  "K6_CLOUD_METRIC_PUSH_INTERVAL",
-		Value: "6s",
-	}, corev1.EnvVar{
-		Name:  "K6_CLOUD_MAX_METRIC_SAMPLES_PER_PACKAGE",
-		Value: "10000",
-	}, corev1.EnvVar{
-		Name:  "K6_CLOUD_MAX_METRIC_PUSH_CONCURRENCY",
+		Value: "10s",
+	}, {
+		Name:  "K6_CLOUD_METRIC_PUSH_CONCURRENCY",
 		Value: "10",
 	},
 }
@@ -46,7 +43,7 @@ func TestNewScriptVolumeClaim(t *testing.T) {
 		Type:     "VolumeClaim",
 	}
 
-	k6 := v1alpha1.K6Spec{
+	k6 := v1alpha1.TestRunSpec{
 		Script: v1alpha1.K6Script{
 			VolumeClaim: v1alpha1.K6VolumeClaim{
 				Name: "Test",
@@ -55,7 +52,7 @@ func TestNewScriptVolumeClaim(t *testing.T) {
 		},
 	}
 
-	script, err := types.ParseScript(&k6)
+	script, err := k6.ParseScript()
 	if err != nil {
 		t.Errorf("NewScript with ConfigMap errored, got: %v, want: %v", err, expectedOutcome)
 	}
@@ -72,7 +69,7 @@ func TestNewScriptConfigMap(t *testing.T) {
 		Type:     "ConfigMap",
 	}
 
-	k6 := v1alpha1.K6Spec{
+	k6 := v1alpha1.TestRunSpec{
 		Script: v1alpha1.K6Script{
 			ConfigMap: v1alpha1.K6Configmap{
 				Name: "Test",
@@ -81,7 +78,7 @@ func TestNewScriptConfigMap(t *testing.T) {
 		},
 	}
 
-	script, err := types.ParseScript(&k6)
+	script, err := k6.ParseScript()
 	if err != nil {
 		t.Errorf("NewScript with ConfigMap errored, got: %v, want: %v", err, expectedOutcome)
 	}
@@ -99,13 +96,13 @@ func TestNewScriptLocalFile(t *testing.T) {
 		Type:     "LocalFile",
 	}
 
-	k6 := v1alpha1.K6Spec{
+	k6 := v1alpha1.TestRunSpec{
 		Script: v1alpha1.K6Script{
 			LocalFile: "/custom/my_test.js",
 		},
 	}
 
-	script, err := types.ParseScript(&k6)
+	script, err := k6.ParseScript()
 	if err != nil {
 		t.Errorf("NewScript with LocalFile errored, got: %v, want: %v", err, expectedOutcome)
 	}
@@ -115,9 +112,9 @@ func TestNewScriptLocalFile(t *testing.T) {
 }
 
 func TestNewScriptNoScript(t *testing.T) {
-	k6 := v1alpha1.K6Spec{}
+	k6 := v1alpha1.TestRunSpec{}
 
-	script, err := types.ParseScript(&k6)
+	script, err := k6.ParseScript()
 	if err == nil && script != nil {
 		t.Errorf("Expected Error from NewScript, got: %v, want: %v", err, errors.New("configMap, VolumeClaim or LocalFile not provided in script definition"))
 	}
@@ -247,12 +244,12 @@ func TestNewRunnerService(t *testing.T) {
 		},
 	}
 
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Runner: v1alpha1.Pod{
 				Metadata: v1alpha1.PodMetadata{
 					Labels: map[string]string{
@@ -317,10 +314,11 @@ func TestNewRunnerJob(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: corev1.PullNever,
 						Name:            "k6",
 						Command:         []string{"k6", "run", "--quiet", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -355,6 +353,7 @@ func TestNewRunnerJob(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -362,12 +361,12 @@ func TestNewRunnerJob(t *testing.T) {
 			},
 		},
 	}
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
 					Name: "test",
@@ -447,11 +446,12 @@ func TestNewRunnerJobNoisy(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: "",
 						Name:            "k6",
 						Command:         []string{"k6", "run", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -477,6 +477,7 @@ func TestNewRunnerJobNoisy(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -484,12 +485,12 @@ func TestNewRunnerJobNoisy(t *testing.T) {
 			},
 		},
 	}
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Quiet: "false",
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
@@ -560,11 +561,12 @@ func TestNewRunnerJobUnpaused(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: "",
 						Name:            "k6",
 						Command:         []string{"k6", "run", "--quiet", "/test/test.js", "--address=0.0.0.0:6565", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -590,6 +592,7 @@ func TestNewRunnerJobUnpaused(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -597,12 +600,12 @@ func TestNewRunnerJobUnpaused(t *testing.T) {
 			},
 		},
 	}
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Paused: "false",
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
@@ -673,11 +676,12 @@ func TestNewRunnerJobArguments(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: "",
 						Name:            "k6",
 						Command:         []string{"k6", "run", "--quiet", "--cool-thing", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -703,6 +707,7 @@ func TestNewRunnerJobArguments(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -711,12 +716,12 @@ func TestNewRunnerJobArguments(t *testing.T) {
 		},
 	}
 
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Arguments: "--cool-thing",
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
@@ -787,11 +792,12 @@ func TestNewRunnerJobServiceAccount(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "test",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: "",
 						Name:            "k6",
 						Command:         []string{"k6", "run", "--quiet", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -817,6 +823,7 @@ func TestNewRunnerJobServiceAccount(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -825,12 +832,12 @@ func TestNewRunnerJobServiceAccount(t *testing.T) {
 		},
 	}
 
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
@@ -902,11 +909,12 @@ func TestNewRunnerJobIstio(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: "",
 						Name:            "k6",
 						Command:         []string{"scuttle", "k6", "run", "--quiet", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -945,6 +953,7 @@ func TestNewRunnerJobIstio(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -952,12 +961,12 @@ func TestNewRunnerJobIstio(t *testing.T) {
 			},
 		},
 	}
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Scuttle: v1alpha1.K6Scuttle{
 				Enabled: "true",
 			},
@@ -1029,11 +1038,12 @@ func TestNewRunnerJobCloud(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					SecurityContext:              &corev1.PodSecurityContext{},
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: "",
 						Name:            "k6",
 						Command:         []string{"k6", "run", "--quiet", "--out", "cloud", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -1068,6 +1078,7 @@ func TestNewRunnerJobCloud(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -1075,12 +1086,12 @@ func TestNewRunnerJobCloud(t *testing.T) {
 			},
 		},
 	}
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
 					Name: "test",
@@ -1098,9 +1109,9 @@ func TestNewRunnerJobCloud(t *testing.T) {
 		},
 		// Since this test only creates a runner's spec so
 		// testrunid has to be set hard-coded here.
-		Status: v1alpha1.K6Status{
+		Status: v1alpha1.TestRunStatus{
 			TestRunID:       "testrunid",
-			AggregationVars: "50|3s|8s|6s|10000|10",
+			AggregationVars: "2|5s|3s|10s|10",
 		},
 	}
 
@@ -1153,11 +1164,12 @@ func TestNewRunnerJobLocalFile(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: "",
 						Name:            "k6",
 						Command:         []string{"sh", "-c", "if [ ! -f /test/test.js ]; then echo \"LocalFile not found exiting...\"; exit 1; fi;\nk6 run --quiet /test/test.js --address=0.0.0.0:6565 --paused --tag instance_id=1 --tag job_name=test-1"},
@@ -1183,6 +1195,7 @@ func TestNewRunnerJobLocalFile(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -1190,12 +1203,12 @@ func TestNewRunnerJobLocalFile(t *testing.T) {
 			},
 		},
 	}
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Scuttle: v1alpha1.K6Scuttle{
 				Enabled: "false",
 			},
@@ -1266,6 +1279,7 @@ func TestNewRunnerJobWithInitContainer(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					ServiceAccountName:           "default",
 					AutomountServiceAccountToken: &automountServiceAccountToken,
 					InitContainers: []corev1.Container{
@@ -1284,10 +1298,11 @@ func TestNewRunnerJobWithInitContainer(t *testing.T) {
 									},
 								},
 							},
+							SecurityContext: &corev1.SecurityContext{},
 						},
 					},
 					Containers: []corev1.Container{{
-						Image:           "ghcr.io/grafana/operator:latest-runner",
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
 						ImagePullPolicy: corev1.PullNever,
 						Name:            "k6",
 						Command:         []string{"k6", "run", "--quiet", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
@@ -1322,6 +1337,7 @@ func TestNewRunnerJobWithInitContainer(t *testing.T) {
 								},
 							},
 						},
+						SecurityContext: &corev1.SecurityContext{},
 					}},
 					TerminationGracePeriodSeconds: &zero,
 					Volumes:                       script.Volume(),
@@ -1329,12 +1345,12 @@ func TestNewRunnerJobWithInitContainer(t *testing.T) {
 			},
 		},
 	}
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
 					Name: "test",
@@ -1374,6 +1390,349 @@ func TestNewRunnerJobWithInitContainer(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+		},
+	}
+
+	job, err := NewRunnerJob(k6, 1, "")
+	if err != nil {
+		t.Errorf("NewRunnerJob errored, got: %v", err)
+	}
+	if diff := deep.Equal(job, expectedOutcome); diff != nil {
+		t.Errorf("NewRunnerJob returned unexpected data, diff: %s", diff)
+	}
+}
+
+func TestNewRunnerJobWithVolume(t *testing.T) {
+	script := &types.Script{
+		Name:     "test",
+		Filename: "thing.js",
+		Type:     "ConfigMap",
+	}
+
+	var zero int64 = 0
+	automountServiceAccountToken := true
+
+	expectedLabels := map[string]string{
+		"app":    "k6",
+		"k6_cr":  "test",
+		"runner": "true",
+		"label1": "awesome",
+	}
+
+	expectedVolumes := append(script.Volume(), corev1.Volume{
+		Name: "k6-test-volume",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+
+	expectedVolumeMounts := append(script.VolumeMount(), corev1.VolumeMount{
+		Name:      "k6-test-volume",
+		MountPath: "/test/location",
+	})
+
+	expectedOutcome := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-1",
+			Namespace: "test",
+			Labels:    expectedLabels,
+			Annotations: map[string]string{
+				"awesomeAnnotation": "dope",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit: new(int32),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: expectedLabels,
+					Annotations: map[string]string{
+						"awesomeAnnotation": "dope",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Hostname:                     "test-1",
+					RestartPolicy:                corev1.RestartPolicyNever,
+					SecurityContext:              &corev1.PodSecurityContext{},
+					Affinity:                     nil,
+					NodeSelector:                 nil,
+					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
+					ServiceAccountName:           "default",
+					AutomountServiceAccountToken: &automountServiceAccountToken,
+					InitContainers: []corev1.Container{
+						{
+							Name:            "k6-init-0",
+							Image:           "busybox:1.28",
+							Command:         []string{"sh", "-c", "cat /test/test.js"},
+							VolumeMounts:    expectedVolumeMounts,
+							ImagePullPolicy: corev1.PullNever,
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									ConfigMapRef: &corev1.ConfigMapEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "env",
+										},
+									},
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{},
+						},
+					},
+					Containers: []corev1.Container{{
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
+						ImagePullPolicy: corev1.PullNever,
+						Name:            "k6",
+						Command:         []string{"k6", "run", "--quiet", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1"},
+						Env:             []corev1.EnvVar{},
+						Resources:       corev1.ResourceRequirements{},
+						VolumeMounts:    expectedVolumeMounts,
+						Ports:           []corev1.ContainerPort{{ContainerPort: 6565}},
+						EnvFrom: []corev1.EnvFromSource{
+							{
+								ConfigMapRef: &corev1.ConfigMapEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "env",
+									},
+								},
+							},
+						},
+						LivenessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   "/v1/status",
+									Port:   intstr.IntOrString{IntVal: 6565},
+									Scheme: "HTTP",
+								},
+							},
+						},
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   "/v1/status",
+									Port:   intstr.IntOrString{IntVal: 6565},
+									Scheme: "HTTP",
+								},
+							},
+						},
+						SecurityContext: &corev1.SecurityContext{},
+					}},
+					TerminationGracePeriodSeconds: &zero,
+					Volumes:                       expectedVolumes,
+				},
+			},
+		},
+	}
+	k6 := &v1alpha1.TestRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: v1alpha1.TestRunSpec{
+			Script: v1alpha1.K6Script{
+				ConfigMap: v1alpha1.K6Configmap{
+					Name: "test",
+					File: "test.js",
+				},
+			},
+			Runner: v1alpha1.Pod{
+				Metadata: v1alpha1.PodMetadata{
+					Labels: map[string]string{
+						"label1": "awesome",
+					},
+					Annotations: map[string]string{
+						"awesomeAnnotation": "dope",
+					},
+				},
+				EnvFrom: []corev1.EnvFromSource{
+					{
+						ConfigMapRef: &corev1.ConfigMapEnvSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: "env",
+							},
+						},
+					},
+				},
+				ImagePullPolicy: corev1.PullNever,
+				InitContainers: []v1alpha1.InitContainer{
+					{
+						Image:   "busybox:1.28",
+						Command: []string{"sh", "-c", "cat /test/test.js"},
+						EnvFrom: []corev1.EnvFromSource{
+							{
+								ConfigMapRef: &corev1.ConfigMapEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "env",
+									},
+								},
+							},
+						},
+						VolumeMounts: []corev1.VolumeMount{
+							corev1.VolumeMount{
+								Name:      "k6-test-volume",
+								MountPath: "/test/location",
+							},
+						},
+					},
+				},
+				Volumes: []corev1.Volume{
+					corev1.Volume{
+						Name: "k6-test-volume",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+					},
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					corev1.VolumeMount{
+						Name:      "k6-test-volume",
+						MountPath: "/test/location",
+					},
+				},
+			},
+		},
+	}
+
+	job, err := NewRunnerJob(k6, 1, "")
+	if err != nil {
+		t.Errorf("NewRunnerJob errored, got: %v", err)
+	}
+	if diff := deep.Equal(job, expectedOutcome); diff != nil {
+		t.Errorf("NewRunnerJob returned unexpected data, diff: %s", diff)
+	}
+}
+
+func TestNewRunnerJobPLZTestRun(t *testing.T) {
+	// NewRunnerJob does not validate the type of Script for
+	// internal consistency (like in PLZ case) so it can be anything.
+	script := &types.Script{
+		Name:     "test",
+		Filename: "thing.js",
+		Type:     "ConfigMap",
+	}
+
+	var zero int64 = 0
+	automountServiceAccountToken := true
+
+	expectedLabels := map[string]string{
+		"app":    "k6",
+		"k6_cr":  "test",
+		"runner": "true",
+		"label1": "awesome",
+	}
+
+	expectedOutcome := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-1",
+			Namespace: "test",
+			Labels:    expectedLabels,
+			Annotations: map[string]string{
+				"awesomeAnnotation": "dope",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit: new(int32),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: expectedLabels,
+					Annotations: map[string]string{
+						"awesomeAnnotation": "dope",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Hostname:                     "test-1",
+					RestartPolicy:                corev1.RestartPolicyNever,
+					SecurityContext:              &corev1.PodSecurityContext{},
+					Affinity:                     nil,
+					NodeSelector:                 nil,
+					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
+					ServiceAccountName:           "default",
+					AutomountServiceAccountToken: &automountServiceAccountToken,
+					Containers: []corev1.Container{{
+						Image:           "ghcr.io/grafana/k6-operator:latest-runner",
+						ImagePullPolicy: corev1.PullNever,
+						Name:            "k6",
+						Command:         []string{"k6", "run", "--quiet", "/test/test.js", "--address=0.0.0.0:6565", "--paused", "--tag", "instance_id=1", "--tag", "job_name=test-1", "--no-setup", "--no-teardown", "--linger"},
+						Env:             []corev1.EnvVar{},
+						Resources:       corev1.ResourceRequirements{},
+						VolumeMounts:    script.VolumeMount(),
+						Ports:           []corev1.ContainerPort{{ContainerPort: 6565}},
+						EnvFrom: []corev1.EnvFromSource{
+							{
+								ConfigMapRef: &corev1.ConfigMapEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "env",
+									},
+								},
+							},
+						},
+						LivenessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   "/v1/status",
+									Port:   intstr.IntOrString{IntVal: 6565},
+									Scheme: "HTTP",
+								},
+							},
+						},
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   "/v1/status",
+									Port:   intstr.IntOrString{IntVal: 6565},
+									Scheme: "HTTP",
+								},
+							},
+						},
+						SecurityContext: &corev1.SecurityContext{},
+					}},
+					TerminationGracePeriodSeconds: &zero,
+					Volumes:                       script.Volume(),
+				},
+			},
+		},
+	}
+	k6 := &v1alpha1.TestRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: v1alpha1.TestRunSpec{
+			Script: v1alpha1.K6Script{
+				ConfigMap: v1alpha1.K6Configmap{
+					Name: "test",
+					File: "test.js",
+				},
+			},
+			Runner: v1alpha1.Pod{
+				Metadata: v1alpha1.PodMetadata{
+					Labels: map[string]string{
+						"label1": "awesome",
+					},
+					Annotations: map[string]string{
+						"awesomeAnnotation": "dope",
+					},
+				},
+				EnvFrom: []corev1.EnvFromSource{
+					{
+						ConfigMapRef: &corev1.ConfigMapEnvSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: "env",
+							},
+						},
+					},
+				},
+				ImagePullPolicy: corev1.PullNever,
+			},
+		},
+		Status: v1alpha1.TestRunStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               v1alpha1.CloudPLZTestRun,
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.Now(),
 				},
 			},
 		},

@@ -3,19 +3,21 @@ package containers
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
+	"github.com/grafana/k6-operator/pkg/types"
 	corev1 "k8s.io/api/core/v1"
 
 	resource "k8s.io/apimachinery/pkg/api/resource"
 )
 
-// NewCurlContainer is used to get a template for a new k6 starting curl container.
-func NewCurlContainer(hostnames []string, image string, imagePullPolicy corev1.PullPolicy, command []string, env []corev1.EnvVar) corev1.Container {
+// NewStartContainer is used to get a template for a new k6 starting curl container.
+func NewStartContainer(hostnames []string, image string, imagePullPolicy corev1.PullPolicy, command []string, env []corev1.EnvVar, securityContext corev1.SecurityContext) corev1.Container {
 	req, _ := json.Marshal(
-		statusAPIRequest{
-			Data: statusAPIRequestData{
-				Attributes: statusAPIRequestDataAttributes{
+		types.StatusAPIRequest{
+			Data: types.StatusAPIRequestData{
+				Attributes: types.StatusAPIRequestDataAttributes{
 					Paused: false,
 				},
 				ID:   "default",
@@ -25,7 +27,7 @@ func NewCurlContainer(hostnames []string, image string, imagePullPolicy corev1.P
 
 	var parts []string
 	for _, hostname := range hostnames {
-		parts = append(parts, fmt.Sprintf("curl --retry 3 -X PATCH -H 'Content-Type: application/json' http://%s:6565/v1/status -d '%s'", hostname, req))
+		parts = append(parts, fmt.Sprintf("curl --retry 3 -X PATCH -H 'Content-Type: application/json' http://%s/v1/status -d '%s'", net.JoinHostPort(hostname, "6565"), req))
 	}
 
 	return corev1.Container{
@@ -47,19 +49,6 @@ func NewCurlContainer(hostnames []string, image string, imagePullPolicy corev1.P
 			command,
 			strings.Join(parts, ";"),
 		),
+		SecurityContext: &securityContext,
 	}
-}
-
-type statusAPIRequest struct {
-	Data statusAPIRequestData `json:"data"`
-}
-
-type statusAPIRequestData struct {
-	Attributes statusAPIRequestDataAttributes `json:"attributes"`
-	ID         string                         `json:"id"`
-	Type       string                         `json:"type"`
-}
-
-type statusAPIRequestDataAttributes struct {
-	Paused bool `json:"paused"`
 }

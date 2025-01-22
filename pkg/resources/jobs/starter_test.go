@@ -46,23 +46,24 @@ func TestNewStarterJob(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					RestartPolicy:                corev1.RestartPolicyNever,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{
-						containers.NewCurlContainer([]string{"testing"}, "image", corev1.PullNever, []string{"sh", "-c"},
-							[]corev1.EnvVar{}),
+						containers.NewStartContainer([]string{"testing"}, "image", corev1.PullNever, []string{"sh", "-c"},
+							[]corev1.EnvVar{}, corev1.SecurityContext{}),
 					},
 				},
 			},
 		},
 	}
 
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Script: v1alpha1.K6Script{
 				ConfigMap: v1alpha1.K6Configmap{
 					Name: "test",
@@ -126,10 +127,11 @@ func TestNewStarterJobIstio(t *testing.T) {
 					Affinity:                     nil,
 					NodeSelector:                 nil,
 					Tolerations:                  nil,
+					TopologySpreadConstraints:    nil,
 					RestartPolicy:                corev1.RestartPolicyNever,
 					SecurityContext:              &corev1.PodSecurityContext{},
 					Containers: []corev1.Container{
-						containers.NewCurlContainer([]string{"testing"}, "image", "", []string{"scuttle", "sh", "-c"}, []corev1.EnvVar{
+						containers.NewStartContainer([]string{"testing"}, "image", "", []string{"scuttle", "sh", "-c"}, []corev1.EnvVar{
 							{
 								Name:  "ENVOY_ADMIN_API",
 								Value: "http://127.0.0.1:15000",
@@ -141,19 +143,21 @@ func TestNewStarterJobIstio(t *testing.T) {
 							{
 								Name:  "WAIT_FOR_ENVOY_TIMEOUT",
 								Value: "15",
-							}}),
+							}},
+							corev1.SecurityContext{},
+						),
 					},
 				},
 			},
 		},
 	}
 
-	k6 := &v1alpha1.K6{
+	k6 := &v1alpha1.TestRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
 		},
-		Spec: v1alpha1.K6Spec{
+		Spec: v1alpha1.TestRunSpec{
 			Scuttle: v1alpha1.K6Scuttle{
 				Enabled: "true",
 			},

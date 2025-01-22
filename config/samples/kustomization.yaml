@@ -3,4 +3,6 @@
 resources:
   - k6_v1alpha1_configmap.yaml
   - k6_v1alpha1_k6.yaml
+  - k6_v1alpha1_privateloadzone.yaml
+  - k6_v1alpha1_testrun.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

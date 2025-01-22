@@ -1,3 +1,5 @@
-FROM radial/busyboxplus:curl
+FROM curlimages/curl:latest
 
-COPY --from=redboxoss/scuttle:latest /scuttle /bin/scuttle
+# as defined by distroless for nonroot
+USER 65532:65532
+COPY --from=kvij/scuttle:latest /scuttle /bin/scuttle

@@ -2,22 +2,22 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/grafana/k6-operator/api/v1alpha1"
+	"github.com/grafana/k6-operator/pkg/cloud"
 	"github.com/grafana/k6-operator/pkg/resources/jobs"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func isServiceReady(log logr.Logger, service *v1.Service) bool {
-	resp, err := http.Get(fmt.Sprintf("http://%v.%v.svc.cluster.local:6565/v1/status", service.ObjectMeta.Name, service.ObjectMeta.Namespace))
+	resp, err := http.Get(fmt.Sprintf("http://%v:6565/v1/status", service.Spec.ClusterIP))
 
 	if err != nil {
 		log.Error(err, fmt.Sprintf("failed to get status from %v", service.ObjectMeta.Name))
@@ -28,23 +28,18 @@ func isServiceReady(log logr.Logger, service *v1.Service) bool {
 }
 
 // StartJobs in the Ready phase using a curl container
-func StartJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.K6, r *K6Reconciler) (res ctrl.Result, err error) {
+func StartJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.TestRun, r *TestRunReconciler) (res ctrl.Result, err error) {
 	// It may take some time to get Services up, so check in frequently
 	res = ctrl.Result{RequeueAfter: time.Second}
 
-	if len(k6.Status.TestRunID) > 0 {
-		log = log.WithValues("testRunId", k6.Status.TestRunID)
+	if len(k6.GetStatus().TestRunID) > 0 {
+		log = log.WithValues("testRunId", k6.GetStatus().TestRunID)
 	}
 
 	log.Info("Waiting for pods to get ready")
 
-	selector := labels.SelectorFromSet(map[string]string{
-		"app":    "k6",
-		"k6_cr":  k6.Name,
-		"runner": "true",
-	})
+	opts := k6.ListOptions()
 
-	opts := &client.ListOptions{LabelSelector: selector, Namespace: k6.Namespace}
 	pl := &v1.PodList{}
 	if err = r.List(ctx, pl, opts); err != nil {
 		log.Error(err, "Could not list pods")
@@ -59,30 +54,51 @@ func StartJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.K6, r *K6Recon
 		count++
 	}
 
-	log.Info(fmt.Sprintf("%d/%d runner pods ready", count, k6.Spec.Parallelism))
+	log.Info(fmt.Sprintf("%d/%d runner pods ready", count, k6.GetSpec().Parallelism))
 
-	if count != int(k6.Spec.Parallelism) {
-		return res, nil
-	}
-
-	var hostnames []string
-	sl := &v1.ServiceList{}
-
-	if err = r.List(ctx, sl, opts); err != nil {
-		log.Error(err, "Could not list services")
-		return res, nil
-	}
-
-	for _, service := range sl.Items {
-		hostnames = append(hostnames, service.Spec.ClusterIP)
-
-		if !isServiceReady(log, &service) {
-			log.Info(fmt.Sprintf("%v service is not ready, aborting", service.ObjectMeta.Name))
-			return res, nil
+	if count != int(k6.GetSpec().Parallelism) {
+		if t, ok := v1alpha1.LastUpdate(k6, v1alpha1.TestRunRunning); !ok {
+			// this should never happen
+			return res, errors.New("Cannot find condition TestRunRunning")
 		} else {
-			log.Info(fmt.Sprintf("%v service is ready", service.ObjectMeta.Name))
+			// let's try this approach
+			if time.Since(t).Minutes() > 5 {
+				msg := fmt.Sprintf(errMessageTooLong, "runner pods", "runner jobs and pods")
+				log.Info(msg)
+
+				if v1alpha1.IsTrue(k6, v1alpha1.CloudTestRun) {
+					events := cloud.ErrorEvent(cloud.K6OperatorStartError).
+						WithDetail(msg).
+						WithAbort()
+					cloud.SendTestRunEvents(r.k6CloudClient, k6.TestRunID(), log, events)
+				}
+			}
+		}
+
+		return res, nil
+	}
+
+	// services
+
+	log.Info("Waiting for services to get ready")
+
+	hostnames, err := r.hostnames(ctx, log, true, opts)
+	log.Info(fmt.Sprintf("err: %v, hostnames: %v", err, hostnames))
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	log.Info(fmt.Sprintf("%d/%d services ready", len(hostnames), k6.GetSpec().Parallelism))
+
+	// setup
+
+	if v1alpha1.IsTrue(k6, v1alpha1.CloudPLZTestRun) {
+		if err := runSetup(ctx, hostnames, log); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
+
+	// starter
 
 	starter := jobs.NewStarterJob(k6, hostnames)
 
@@ -99,9 +115,9 @@ func StartJobs(ctx context.Context, log logr.Logger, k6 *v1alpha1.K6, r *K6Recon
 
 	log.Info("Created starter job")
 
-	log.Info("Changing stage of K6 status to started")
-	k6.Status.Stage = "started"
-	k6.UpdateCondition(v1alpha1.TestRunRunning, metav1.ConditionTrue)
+	log.Info("Changing stage of TestRun status to started")
+	k6.GetStatus().Stage = "started"
+	v1alpha1.UpdateCondition(k6, v1alpha1.TestRunRunning, metav1.ConditionTrue)
 
 	if updateHappened, err := r.UpdateStatus(ctx, k6, log); err != nil {
 		return ctrl.Result{}, err
