@@ -7,20 +7,20 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.18.x]
-        k8s_version: [1.19.2]
+        go-version: [1.22.x]
+        k8s_version: [1.24.1, 1.27.1, 1.30.0]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Test
         run: |
-          make test-setup-ci
+          make test-setup
           make test
         env:
           ENVTEST_K8S_VERSION: ${{ matrix.k8s_version }}

@@ -2,7 +2,6 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: manager-role
 rules:
 - apiGroups:
@@ -70,7 +69,8 @@ rules:
 - apiGroups:
   - k6.io
   resources:
-  - k6s
+  - privateloadzones
+  - testruns
   verbs:
   - create
   - delete
@@ -82,8 +82,10 @@ rules:
 - apiGroups:
   - k6.io
   resources:
-  - k6s/finalizers
-  - k6s/status
+  - privateloadzones/finalizers
+  - privateloadzones/status
+  - testruns/finalizers
+  - testruns/status
   verbs:
   - get
   - patch
